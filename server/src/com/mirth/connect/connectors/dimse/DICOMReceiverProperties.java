@@ -48,6 +48,10 @@ public class DICOMReceiverProperties extends ConnectorProperties implements List
     private String sosndbuf;
     private boolean tcpDelay;
 
+    private String storageFolder;
+    private boolean deleteAfterProcessing;
+    private String maxConnections;
+
     private String keyPW;
     private String keyStore;
     private String keyStorePW;
@@ -79,6 +83,10 @@ public class DICOMReceiverProperties extends ConnectorProperties implements List
         sorcvbuf = "0";
         sosndbuf = "0";
         tcpDelay = true;
+
+        storageFolder = "";
+        deleteAfterProcessing = false;
+        maxConnections = "0";
 
         keyPW = "";
         keyStore = "";
@@ -296,6 +304,30 @@ public class DICOMReceiverProperties extends ConnectorProperties implements List
         this.tcpDelay = tcpDelay;
     }
 
+    public String getStorageFolder() {
+        return storageFolder;
+    }
+
+    public void setStorageFolder(String storageFolder) {
+        this.storageFolder = storageFolder;
+    }
+
+    public boolean isDeleteAfterProcessing() {
+        return deleteAfterProcessing;
+    }
+
+    public void setDeleteAfterProcessing(boolean deleteAfterProcessing) {
+        this.deleteAfterProcessing = deleteAfterProcessing;
+    }
+
+    public String getMaxConnections() {
+        return maxConnections;
+    }
+
+    public void setMaxConnections(String maxConnections) {
+        this.maxConnections = maxConnections;
+    }
+
     public String getKeyPW() {
         return keyPW;
     }
@@ -414,6 +446,8 @@ public class DICOMReceiverProperties extends ConnectorProperties implements List
         purgedProperties.put("noClientAuth", noClientAuth);
         purgedProperties.put("nossl2", nossl2);
         purgedProperties.put("tls", tls);
+        purgedProperties.put("deleteAfterProcessing", deleteAfterProcessing);
+        purgedProperties.put("maxConnections", PurgeUtil.getNumericValue(maxConnections));
         return purgedProperties;
     }
 }

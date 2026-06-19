@@ -52,6 +52,12 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
@@ -76,7 +82,6 @@ import org.dcm4che2.net.DicomServiceException;
 import org.dcm4che2.net.DimseRSPHandler;
 import org.dcm4che2.net.NetworkApplicationEntity;
 import org.dcm4che2.net.NetworkConnection;
-import org.dcm4che2.net.NewThreadExecutor;
 import org.dcm4che2.net.PDVInputStream;
 import org.dcm4che2.net.Status;
 import org.dcm4che2.net.TransferCapability;
@@ -213,7 +218,11 @@ public class DcmRcv {
 
     private final String name;
 
-    private Executor executor;
+    private ExecutorService executor;
+
+    private int maxConnections = 0;
+
+    private final AtomicInteger threadCount = new AtomicInteger();
 
     protected Device device;
 
@@ -293,7 +302,6 @@ public class DcmRcv {
     protected void init() {
         nc = createNetworkConnection();
         device = new Device(name);
-        executor = new NewThreadExecutor(name);
         device.setNetworkApplicationEntity(ae);
         device.setNetworkConnection(nc);
         ae.setNetworkConnection(nc);
@@ -301,6 +309,27 @@ public class DcmRcv {
         ae.register(new VerificationService());
         ae.register(storageSCP);
         ae.register(stgcmtSCP);
+    }
+
+    protected ExecutorService buildExecutor() {
+        if (maxConnections > 0) {
+            return new ThreadPoolExecutor(
+                    maxConnections, maxConnections,
+                    60L, TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<>(),
+                    r -> new Thread(r, name + "-worker-" + threadCount.incrementAndGet()));
+        }
+        return Executors.newCachedThreadPool(
+                r -> new Thread(r, name + "-worker-" + threadCount.incrementAndGet()));
+    }
+
+    public void setMaxConnections(int maxConnections) {
+        this.maxConnections = maxConnections;
+        nc.setMaxScpAssociations(maxConnections > 0 ? maxConnections : 0);
+    }
+
+    public int getMaxConnections() {
+        return maxConnections;
     }
 
     protected NetworkConnection createNetworkConnection() {
@@ -1097,6 +1126,7 @@ public class DcmRcv {
     }
 
     public void start() throws IOException {
+        executor = buildExecutor();
         device.startListening(executor);
         System.out.println("Start Server listening on port " + nc.getPort());
     }
@@ -1104,6 +1134,9 @@ public class DcmRcv {
     public void stop() {
         if (device != null)
             device.stopListening();
+
+        if (executor != null)
+            executor.shutdown();
 
         if (nc != null)
             System.out.println("Stop Server listening on port " + nc.getPort());
