@@ -1,8 +1,8 @@
 /*
  * Copyright (c) Mirth Corporation. All rights reserved.
- * 
+ *
  * http://www.mirthcorp.com
- * 
+ *
  * The software in this package is published under the terms of the MPL license a copy of which has
  * been included with this distribution in the LICENSE.txt file.
  */
@@ -39,11 +39,9 @@ public class DICOMReceiver extends SourceConnector {
     public void onDeploy() throws ConnectorTaskException {
         this.connectorProperties = (DICOMReceiverProperties) getConnectorProperties();
 
-        // load the default configuration
         String configurationClass = configurationController.getProperty(connectorProperties.getProtocol(), "dicomConfigurationClass");
-
         try {
-            configuration = (DICOMConfiguration) Class.forName(configurationClass).newInstance();
+            configuration = (DICOMConfiguration) Class.forName(configurationClass).getDeclaredConstructor().newInstance();
         } catch (Throwable t) {
             logger.trace("could not find custom configuration class, using default");
             configuration = new DefaultDICOMConfiguration();
@@ -93,75 +91,62 @@ public class DICOMReceiver extends SourceConnector {
             aeTitle = StringUtils.defaultIfBlank(aeTitle, null);
             dcmrcv.setAEtitle(aeTitle);
 
-            //TODO Allow variables
             int value = NumberUtils.toInt(connectorProperties.getReaper());
-            if (value != 10) {
-                dcmrcv.setAssociationReaperPeriod(value);
-            }
+            if (value != 10) dcmrcv.setAssociationReaperPeriod(value);
 
             value = NumberUtils.toInt(connectorProperties.getIdleTo());
-            if (value != 60) {
-                dcmrcv.setIdleTimeout(value);
-            }
+            if (value != 60) dcmrcv.setIdleTimeout(value);
 
             value = NumberUtils.toInt(connectorProperties.getRequestTo());
-            if (value != 5) {
-                dcmrcv.setRequestTimeout(value);
-            }
+            if (value != 5) dcmrcv.setRequestTimeout(value);
 
             value = NumberUtils.toInt(connectorProperties.getReleaseTo());
-            if (value != 5) {
-                dcmrcv.setReleaseTimeout(value);
-            }
+            if (value != 5) dcmrcv.setReleaseTimeout(value);
 
             value = NumberUtils.toInt(connectorProperties.getSoCloseDelay());
-            if (value != 50) {
-                dcmrcv.setSocketCloseDelay(value);
-            }
+            if (value != 50) dcmrcv.setSocketCloseDelay(value);
 
             value = NumberUtils.toInt(connectorProperties.getRspDelay());
-            if (value > 0) {
-                dcmrcv.setDimseRspDelay(value);
-            }
+            if (value > 0) dcmrcv.setDimseRspDelay(value);
 
             value = NumberUtils.toInt(connectorProperties.getRcvpdulen());
-            if (value != 16) {
-                dcmrcv.setMaxPDULengthReceive(value);
-            }
+            if (value != 16) dcmrcv.setMaxPDULengthReceive(value);
 
             value = NumberUtils.toInt(connectorProperties.getSndpdulen());
-            if (value != 16) {
-                dcmrcv.setMaxPDULengthSend(value);
-            }
+            if (value != 16) dcmrcv.setMaxPDULengthSend(value);
 
             value = NumberUtils.toInt(connectorProperties.getSosndbuf());
-            if (value > 0) {
-                dcmrcv.setSendBufferSize(value);
-            }
+            if (value > 0) dcmrcv.setSendBufferSize(value);
 
             value = NumberUtils.toInt(connectorProperties.getSorcvbuf());
-            if (value > 0) {
-                dcmrcv.setReceiveBufferSize(value);
-            }
+            if (value > 0) dcmrcv.setReceiveBufferSize(value);
 
             value = NumberUtils.toInt(connectorProperties.getBufSize());
-            if (value != 1) {
-                dcmrcv.setFileBufferSize(value);
-            }
+            if (value != 1) dcmrcv.setFileBufferSize(value);
 
             dcmrcv.setPackPDV(connectorProperties.isPdv1());
             dcmrcv.setTcpNoDelay(!connectorProperties.isTcpDelay());
 
             value = NumberUtils.toInt(connectorProperties.getAsync());
-            if (value > 0) {
-                dcmrcv.setMaxOpsPerformed(value);
+            if (value > 0) dcmrcv.setMaxOpsPerformed(value);
+
+            // File-based storage settings
+            String storageFolder = replacer.replaceValues(connectorProperties.getStorageFolder(), getChannelId(), getChannel().getName());
+            if (StringUtils.isNotBlank(storageFolder)) {
+                dcmrcv.setStorageFolder(storageFolder);
+                dcmrcv.setDeleteAfterProcessing(connectorProperties.isDeleteAfterProcessing());
+                // Respond immediately after file is written to disk; pipeline runs async
+                setRespondAfterProcessing(false);
+            }
+
+            // Max concurrent associations + thread pool sizing
+            int maxConnections = NumberUtils.toInt(connectorProperties.getMaxConnections());
+            if (maxConnections > 0) {
+                dcmrcv.setMaxConnections(maxConnections);
             }
 
             dcmrcv.initTransferCapability();
-
             configuration.configureDcmRcv(dcmrcv, this, connectorProperties);
-
-            // start the DICOM port
             dcmrcv.start();
 
             eventController.dispatchEvent(new ConnectionStatusEvent(getChannelId(), getMetaDataId(), getSourceName(), ConnectionStatusEventType.IDLE));
@@ -179,7 +164,6 @@ public class DICOMReceiver extends SourceConnector {
         } finally {
             eventController.dispatchEvent(new ConnectionStatusEvent(getChannelId(), getMetaDataId(), getSourceName(), ConnectionStatusEventType.DISCONNECTED));
         }
-
         logger.debug("closed DICOM port");
     }
 
@@ -191,6 +175,18 @@ public class DICOMReceiver extends SourceConnector {
     @Override
     public void handleRecoveredResponse(DispatchResult dispatchResult) {
         finishDispatch(dispatchResult);
+    }
+
+    @Override
+    public void finishDispatch(DispatchResult dispatchResult) {
+        try {
+            super.finishDispatch(dispatchResult);
+        } finally {
+            // Notify MirthDcmRcv that pipeline is done so it can delete the file
+            if (dispatchResult != null && dcmrcv != null) {
+                dcmrcv.onDispatchComplete(dispatchResult.getMessageId());
+            }
+        }
     }
 
     public TemplateValueReplacer getReplacer() {
