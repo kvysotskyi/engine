@@ -650,3 +650,4 @@ donkey/donkey-test
 # /server/src/org/mozilla/javascript/
 
 # /server/src/org/mozilla/javascript/xmlimpl/
+.claude/
