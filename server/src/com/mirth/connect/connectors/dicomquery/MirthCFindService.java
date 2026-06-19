@@ -14,8 +14,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -34,6 +36,9 @@ import org.dcm4che2.net.CommandUtils;
 import org.dcm4che2.net.DicomServiceException;
 import org.dcm4che2.net.DimseRSP;
 import org.dcm4che2.net.Status;
+import org.dcm4che2.net.pdu.AAssociateAC;
+import org.dcm4che2.net.pdu.AAssociateRQ;
+import org.dcm4che2.net.pdu.PresentationContext;
 import org.dcm4che2.net.service.CFindService;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -66,7 +71,7 @@ class MirthCFindService extends CFindService {
             throws DicomServiceException, IOException {
 
         String xml = dicomObjectToXml(queryData);
-        Map<String, Object> sourceMap = buildSourceMap(as);
+        Map<String, Object> sourceMap = buildSourceMap(as, pcid);
 
         DispatchResult dispatchResult = null;
         try {
@@ -239,8 +244,10 @@ class MirthCFindService extends CFindService {
     // Source map
     // -------------------------------------------------------------------------
 
-    private Map<String, Object> buildSourceMap(Association as) {
+    private Map<String, Object> buildSourceMap(Association as, int pcid) {
         Map<String, Object> sourceMap = new HashMap<>();
+
+        // Basic connection info
         sourceMap.put("callingAET", as.getRemoteAET());
         sourceMap.put("calledAET", as.getLocalAET());
         if (as.getSocket() != null) {
@@ -252,6 +259,55 @@ class MirthCFindService extends CFindService {
                 sourceMap.put("remoteHost", remote.getHostString());
             }
         }
+
+        // Active presentation context for this C-FIND request
+        sourceMap.put("presentationContextId", pcid);
+
+        // A-ASSOCIATE-RQ — all proposed presentation contexts
+        AAssociateRQ rqPdu = as.getAssociateRQ();
+        if (rqPdu != null) {
+            sourceMap.put("associateRQImplClassUID", rqPdu.getImplClassUID());
+            sourceMap.put("associateRQImplVersionName", rqPdu.getImplVersionName());
+            sourceMap.put("associateRQApplicationContext", rqPdu.getApplicationContext());
+
+            Collection<PresentationContext> rqPcs = rqPdu.getPresentationContexts();
+            if (rqPcs != null && !rqPcs.isEmpty()) {
+                Map<Integer, String> pcMap = new LinkedHashMap<>();
+                for (PresentationContext pc : rqPcs) {
+                    pcMap.put(pc.getPCID(), pc.toString());
+                }
+                sourceMap.put("associateRQPresentationContexts", pcMap);
+            }
+
+            // The specific RQ context for this C-FIND call
+            PresentationContext rqPc = rqPdu.getPresentationContext(pcid);
+            if (rqPc != null) {
+                sourceMap.put("sopClass", rqPc.getAbstractSyntax());
+            }
+        }
+
+        // A-ASSOCIATE-AC — accepted/rejected presentation contexts with negotiated transfer syntax
+        AAssociateAC acPdu = as.getAssociateAC();
+        if (acPdu != null) {
+            sourceMap.put("associateACImplClassUID", acPdu.getImplClassUID());
+            sourceMap.put("associateACImplVersionName", acPdu.getImplVersionName());
+
+            Collection<PresentationContext> acPcs = acPdu.getPresentationContexts();
+            if (acPcs != null && !acPcs.isEmpty()) {
+                Map<Integer, String> pcMap = new LinkedHashMap<>();
+                for (PresentationContext pc : acPcs) {
+                    pcMap.put(pc.getPCID(), pc.toString());
+                }
+                sourceMap.put("associateACPresentationContexts", pcMap);
+            }
+
+            // Negotiated transfer syntax for this specific context
+            PresentationContext acPc = acPdu.getPresentationContext(pcid);
+            if (acPc != null) {
+                sourceMap.put("transferSyntax", acPc.getTransferSyntax());
+            }
+        }
+
         return sourceMap;
     }
 }
