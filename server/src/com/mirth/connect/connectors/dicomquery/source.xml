@@ -1,0 +1,19 @@
+<connectorMetaData path="dicomquery">
+	<name>DICOM C-FIND SCP</name>
+	<author>NextGen Healthcare</author>
+	<pluginVersion>@mirthversion</pluginVersion>
+	<mirthVersion>@mirthversion</mirthVersion>
+	<url>https://openintegrationengine.org</url>
+	<description>Listens for DICOM C-FIND requests from remote SCUs. Each incoming query is dispatched to the channel as XML; the channel's response is streamed back as C-FIND-RSP PENDING items. Supports Study Root, Patient Root, and Modality Worklist information models.</description>
+	<clientClassName>com.mirth.connect.connectors.dicomquery.DICOMQueryListener</clientClassName>
+	<serverClassName>com.mirth.connect.connectors.dicomquery.DICOMQueryReceiver</serverClassName>
+	<sharedClassName>com.mirth.connect.connectors.dicomquery.DICOMQueryReceiverProperties</sharedClassName>
+	<library type="CLIENT" path="dicomquery-client.jar" />
+	<library type="SHARED" path="dicomquery-shared.jar" />
+	<library type="SERVER" path="dicomquery-server.jar" />
+	<library type="SERVER" path="lib/dcm4che-core-2.0.29.jar" />
+	<library type="SERVER" path="lib/dcm4che-net-2.0.29.jar" />
+	<transformers></transformers>
+	<protocol>dicomquery</protocol>
+	<type>SOURCE</type>
+</connectorMetaData>
