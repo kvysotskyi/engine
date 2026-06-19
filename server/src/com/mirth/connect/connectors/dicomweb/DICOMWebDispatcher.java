@@ -32,8 +32,8 @@ import org.apache.http.util.EntityUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.mirth.connect.connectors.dicomweb.AzureAuthHelper.Token;
 import com.mirth.connect.connectors.dicomweb.DICOMWebDispatcherProperties.AuthType;
-import com.mirth.connect.connectors.dicomweb.GoogleAuthHelper.Token;
 import com.mirth.connect.donkey.model.channel.ConnectorProperties;
 import com.mirth.connect.donkey.model.event.ConnectionStatusEventType;
 import com.mirth.connect.donkey.model.event.ErrorEventType;
@@ -60,8 +60,9 @@ public class DICOMWebDispatcher extends DestinationConnector {
     private DICOMWebDispatcherProperties connectorProperties;
     private CloseableHttpClient httpClient;
 
-    /** Cached Google OAuth2 token — refreshed lazily when expired. */
-    private volatile Token googleToken;
+    /** Cached tokens — refreshed lazily, guarded by their own monitors. */
+    private volatile GoogleAuthHelper.Token googleToken;
+    private volatile Token azureToken;
 
     @Override
     public void onDeploy() throws ConnectorTaskException {
@@ -73,26 +74,20 @@ public class DICOMWebDispatcher extends DestinationConnector {
         int connectMs = NumberUtils.toInt(connectorProperties.getConnectTimeout(), 30000);
         int readMs    = NumberUtils.toInt(connectorProperties.getReadTimeout(), 60000);
 
-        RequestConfig requestConfig = RequestConfig.custom()
+        RequestConfig cfg = RequestConfig.custom()
                 .setConnectTimeout(connectMs)
                 .setSocketTimeout(readMs)
                 .setConnectionRequestTimeout(connectMs)
                 .build();
 
-        httpClient = HttpClients.custom()
-                .setDefaultRequestConfig(requestConfig)
-                .build();
+        httpClient = HttpClients.custom().setDefaultRequestConfig(cfg).build();
     }
 
     @Override
-    public void onStop() throws ConnectorTaskException {
-        closeHttpClient();
-    }
+    public void onStop() throws ConnectorTaskException { closeHttpClient(); }
 
     @Override
-    public void onHalt() throws ConnectorTaskException {
-        closeHttpClient();
-    }
+    public void onHalt() throws ConnectorTaskException { closeHttpClient(); }
 
     @Override
     public void onUndeploy() throws ConnectorTaskException {}
@@ -109,12 +104,12 @@ public class DICOMWebDispatcher extends DestinationConnector {
 
     @Override
     public void replaceConnectorProperties(ConnectorProperties connectorProperties, ConnectorMessage connectorMessage) {
-        DICOMWebDispatcherProperties props = (DICOMWebDispatcherProperties) connectorProperties;
-        props.setUrl(replacer.replaceValues(props.getUrl(), connectorMessage));
-        props.setUsername(replacer.replaceValues(props.getUsername(), connectorMessage));
-        props.setPassword(replacer.replaceValues(props.getPassword(), connectorMessage));
-        props.setBearerToken(replacer.replaceValues(props.getBearerToken(), connectorMessage));
-        props.setTemplate(replacer.replaceValues(props.getTemplate(), connectorMessage));
+        DICOMWebDispatcherProperties p = (DICOMWebDispatcherProperties) connectorProperties;
+        p.setUrl(replacer.replaceValues(p.getUrl(), connectorMessage));
+        p.setUsername(replacer.replaceValues(p.getUsername(), connectorMessage));
+        p.setPassword(replacer.replaceValues(p.getPassword(), connectorMessage));
+        p.setBearerToken(replacer.replaceValues(p.getBearerToken(), connectorMessage));
+        p.setTemplate(replacer.replaceValues(p.getTemplate(), connectorMessage));
     }
 
     @Override
@@ -131,7 +126,6 @@ public class DICOMWebDispatcher extends DestinationConnector {
 
         try {
             byte[] dicomBytes = getDicomBytes(props, connectorMessage);
-
             String boundary = "stowrs-" + UUID.randomUUID().toString();
             byte[] body = buildMultipartBody(dicomBytes, boundary);
 
@@ -139,24 +133,26 @@ public class DICOMWebDispatcher extends DestinationConnector {
             post.setHeader("Content-Type",
                     "multipart/related; type=\"application/dicom\"; boundary=" + boundary);
             post.setHeader("Accept", "application/dicom+xml");
-            applyAuth(post, props);
             post.setEntity(new ByteArrayEntity(body));
 
+            // Auth must be applied after all headers/entity are set (AWS SigV4 signs them)
+            applyAuth(post, props, body);
+
             try (CloseableHttpResponse httpResponse = httpClient.execute(post)) {
-                int statusCode = httpResponse.getStatusLine().getStatusCode();
+                int code = httpResponse.getStatusLine().getStatusCode();
                 HttpEntity entity = httpResponse.getEntity();
                 responseData = entity != null
                         ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : "";
 
-                if (statusCode == 200 || statusCode == 202) {
+                if (code == 200 || code == 202) {
                     responseStatus = Status.SENT;
-                    responseStatusMessage = "STOW-RS accepted: HTTP " + statusCode;
-                } else if (statusCode >= 500) {
+                    responseStatusMessage = "STOW-RS accepted: HTTP " + code;
+                } else if (code >= 500) {
                     responseStatus = Status.QUEUED;
-                    responseStatusMessage = "STOW-RS server error: HTTP " + statusCode;
+                    responseStatusMessage = "STOW-RS server error: HTTP " + code;
                 } else {
                     responseStatus = Status.ERROR;
-                    responseStatusMessage = "STOW-RS rejected: HTTP " + statusCode;
+                    responseStatusMessage = "STOW-RS rejected: HTTP " + code;
                 }
             }
         } catch (InterruptedException e) {
@@ -179,56 +175,17 @@ public class DICOMWebDispatcher extends DestinationConnector {
     }
 
     // -------------------------------------------------------------------------
-    // Helpers
+    // Auth
     // -------------------------------------------------------------------------
 
-    private byte[] getDicomBytes(DICOMWebDispatcherProperties props, ConnectorMessage connectorMessage)
+    private void applyAuth(HttpPost post, DICOMWebDispatcherProperties props, byte[] body)
             throws Exception {
-        // Prefer on-disk file from file-mode receiver (avoids Base64 round-trip)
-        Map<String, Object> sourceMap = connectorMessage.getSourceMap();
-        if (sourceMap != null) {
-            Object dicomFilePath = sourceMap.get("dicomFile");
-            if (dicomFilePath instanceof String) {
-                File file = new File((String) dicomFilePath);
-                if (file.exists()) {
-                    try (FileInputStream fis = new FileInputStream(file)) {
-                        return IOUtils.toByteArray(fis);
-                    }
-                }
-            }
-        }
-        // Fall back to template-based content (reAttachMessage handles DICOM attachment reassembly)
-        return getAttachmentHandlerProvider().reAttachMessage(
-                props.getTemplate(), connectorMessage, null, true,
-                props.getDestinationConnectorProperties().isReattachAttachments());
-    }
-
-    private byte[] buildMultipartBody(byte[] dicomBytes, String boundary) throws IOException {
-        byte[] boundaryLine = ("--" + boundary).getBytes(StandardCharsets.US_ASCII);
-        byte[] contentTypeHeader = "Content-Type: application/dicom".getBytes(StandardCharsets.US_ASCII);
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream(dicomBytes.length + 256);
-        out.write(boundaryLine);
-        out.write(CRLF);
-        out.write(contentTypeHeader);
-        out.write(CRLF);
-        out.write(CRLF);
-        out.write(dicomBytes);
-        out.write(CRLF);
-        out.write(boundaryLine);
-        out.write("--".getBytes(StandardCharsets.US_ASCII));
-        out.write(CRLF);
-        return out.toByteArray();
-    }
-
-    private void applyAuth(HttpPost post, DICOMWebDispatcherProperties props) throws Exception {
         switch (props.getAuthType()) {
             case BASIC:
                 if (StringUtils.isNotBlank(props.getUsername())) {
-                    String credentials = props.getUsername() + ":" + props.getPassword();
-                    String encoded = Base64.getEncoder().encodeToString(
-                            credentials.getBytes(StandardCharsets.UTF_8));
-                    post.setHeader("Authorization", "Basic " + encoded);
+                    String creds = props.getUsername() + ":" + props.getPassword();
+                    post.setHeader("Authorization", "Basic " +
+                            Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8)));
                 }
                 break;
 
@@ -242,21 +199,74 @@ public class DICOMWebDispatcher extends DestinationConnector {
                 post.setHeader("Authorization", "Bearer " + getGoogleToken(props));
                 break;
 
+            case AZURE_SERVICE_PRINCIPAL:
+                post.setHeader("Authorization", "Bearer " + getAzureToken(props));
+                break;
+
+            case AWS_SIG_V4:
+                AwsSigV4Helper.sign(post, body,
+                        props.getAwsRegion(), props.getAwsService(),
+                        props.getAwsAccessKeyId(), props.getAwsSecretAccessKey());
+                break;
+
             case NONE:
             default:
                 break;
         }
     }
 
-    /**
-     * Returns a valid Google access token, fetching or refreshing as needed.
-     * Synchronized to avoid duplicate token fetches across queue threads.
-     */
     private synchronized String getGoogleToken(DICOMWebDispatcherProperties props) throws Exception {
         if (googleToken == null || googleToken.isExpired()) {
             logger.debug("Fetching Google Cloud Healthcare access token");
             googleToken = GoogleAuthHelper.fetchToken(props.getGoogleServiceAccountKeyFile());
         }
         return googleToken.value;
+    }
+
+    private synchronized String getAzureToken(DICOMWebDispatcherProperties props) throws Exception {
+        if (azureToken == null || azureToken.isExpired()) {
+            logger.debug("Fetching Azure AD access token");
+            azureToken = AzureAuthHelper.fetchToken(
+                    props.getAzureTenantId(), props.getAzureClientId(),
+                    props.getAzureClientSecret(), props.getAzureScope());
+        }
+        return azureToken.value;
+    }
+
+    // -------------------------------------------------------------------------
+    // DICOM bytes + multipart body
+    // -------------------------------------------------------------------------
+
+    private byte[] getDicomBytes(DICOMWebDispatcherProperties props, ConnectorMessage connectorMessage)
+            throws Exception {
+        Map<String, Object> sourceMap = connectorMessage.getSourceMap();
+        if (sourceMap != null) {
+            Object dicomFilePath = sourceMap.get("dicomFile");
+            if (dicomFilePath instanceof String) {
+                File file = new File((String) dicomFilePath);
+                if (file.exists()) {
+                    try (FileInputStream fis = new FileInputStream(file)) {
+                        return IOUtils.toByteArray(fis);
+                    }
+                }
+            }
+        }
+        return getAttachmentHandlerProvider().reAttachMessage(
+                props.getTemplate(), connectorMessage, null, true,
+                props.getDestinationConnectorProperties().isReattachAttachments());
+    }
+
+    private byte[] buildMultipartBody(byte[] dicomBytes, String boundary) throws IOException {
+        byte[] boundaryLine   = ("--" + boundary).getBytes(StandardCharsets.US_ASCII);
+        byte[] contentTypeLine = "Content-Type: application/dicom".getBytes(StandardCharsets.US_ASCII);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream(dicomBytes.length + 256);
+        out.write(boundaryLine);   out.write(CRLF);
+        out.write(contentTypeLine); out.write(CRLF);
+        out.write(CRLF);
+        out.write(dicomBytes);     out.write(CRLF);
+        out.write(boundaryLine);   out.write("--".getBytes(StandardCharsets.US_ASCII));
+        out.write(CRLF);
+        return out.toByteArray();
     }
 }
