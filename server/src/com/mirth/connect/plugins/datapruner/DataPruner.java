@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
@@ -67,6 +69,8 @@ public class DataPruner implements Runnable {
     public static final int DEFAULT_PRUNING_BLOCK_SIZE = 1000;
     public static final int DEFAULT_ARCHIVING_BLOCK_SIZE = 50;
     private static final int ID_RETRIEVE_LIMIT = 100000;
+    private static final Pattern DICOM_FILE_PATTERN = Pattern.compile(
+            "<string>dicomFile</string>\\s*<string>(.*?)</string>", Pattern.DOTALL);
 
     private int numExported;
     private int retryCount;
@@ -693,7 +697,33 @@ public class DataPruner implements Runnable {
                     params.put("maxMessageId", endRange);
                 }
 
+                if (!contentOnly) {
+                    deleteDicomFilesBeforePrune(params);
+                }
                 runDeleteQueries(params, contentOnly, result);
+            }
+        }
+    }
+
+    private void deleteDicomFilesBeforePrune(Map<String, Object> params) {
+        if (!DatabaseUtil.statementExists("Message.getSourceMapsWithDicomFile")) {
+            return;
+        }
+        SqlSession session = SqlConfig.getInstance().getReadOnlySqlSessionManager().openSession(true);
+        List<String> contentList;
+        try {
+            contentList = session.selectList("Message.getSourceMapsWithDicomFile", params);
+        } finally {
+            session.close();
+        }
+        for (String content : contentList) {
+            Matcher matcher = DICOM_FILE_PATTERN.matcher(content);
+            if (matcher.find()) {
+                String filePath = matcher.group(1);
+                File file = new File(filePath);
+                if (file.exists() && !file.delete()) {
+                    logger.warn("Failed to delete DICOM file during pruning: " + filePath);
+                }
             }
         }
     }
