@@ -9,7 +9,11 @@
 
 package com.mirth.connect.connectors.dicomweb;
 
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
 import javax.swing.BorderFactory;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
@@ -22,15 +26,29 @@ import com.mirth.connect.client.ui.components.MirthPasswordField;
 import com.mirth.connect.client.ui.components.MirthSyntaxTextArea;
 import com.mirth.connect.client.ui.components.MirthTextField;
 import com.mirth.connect.client.ui.panels.connectors.ConnectorSettingsPanel;
+import com.mirth.connect.connectors.dicomweb.DICOMWebDispatcherProperties.AuthType;
 import com.mirth.connect.donkey.model.channel.ConnectorProperties;
 import com.mirth.connect.model.Connector.Mode;
 
 public class DICOMWebSender extends ConnectorSettingsPanel {
 
     private MirthIconTextField urlField;
+    private JComboBox<AuthType> authTypeCombo;
+
+    // Basic auth fields
+    private JLabel usernameLabel;
     private MirthTextField usernameField;
+    private JLabel passwordLabel;
     private MirthPasswordField passwordField;
+
+    // Bearer token field
+    private JLabel bearerTokenLabel;
     private MirthTextField bearerTokenField;
+
+    // Google service account field
+    private JLabel saKeyFileLabel;
+    private MirthTextField saKeyFileField;
+
     private MirthTextField connectTimeoutField;
     private MirthTextField readTimeoutField;
     private MirthSyntaxTextArea templateArea;
@@ -38,56 +56,106 @@ public class DICOMWebSender extends ConnectorSettingsPanel {
     public DICOMWebSender() {
         setBackground(UIConstants.BACKGROUND_COLOR);
         setBorder(BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        setLayout(new MigLayout("novisualpadding, hidemode 3, insets 0", "[right][grow]"));
+        setLayout(new MigLayout("novisualpadding, hidemode 3, insets 0", "[grow]"));
 
-        JPanel container = new JPanel(new MigLayout("novisualpadding, hidemode 3, insets 10 10 10 10, gap 4", "[right][grow]"));
-        container.setBackground(UIConstants.BACKGROUND_COLOR);
-        container.setBorder(BorderFactory.createTitledBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new java.awt.Color(204, 204, 204)), "DICOMweb STOW-RS Settings"));
+        JPanel panel = new JPanel(new MigLayout(
+                "novisualpadding, hidemode 3, insets 10, gap 4", "[right][grow]"));
+        panel.setBackground(UIConstants.BACKGROUND_COLOR);
+        panel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, new java.awt.Color(204, 204, 204)),
+                "DICOMweb STOW-RS Settings"));
 
+        // URL
         urlField = new MirthIconTextField();
-        urlField.setToolTipText("The STOW-RS endpoint URL (e.g. http://host:8080/wado/rs/studies).");
+        urlField.setToolTipText("<html>STOW-RS endpoint URL.<br>"
+                + "For Google Cloud Healthcare:<br>"
+                + "https://healthcare.googleapis.com/v1/projects/{project}/locations/{location}"
+                + "/datasets/{dataset}/dicomStores/{store}/dicomWeb/studies</html>");
 
+        // Auth type selector
+        authTypeCombo = new JComboBox<>(AuthType.values());
+        authTypeCombo.setToolTipText("Authentication method for the STOW-RS request.");
+        authTypeCombo.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                updateAuthVisibility();
+            }
+        });
+
+        // Basic auth
+        usernameLabel = new JLabel("Username:");
         usernameField = new MirthTextField();
-        usernameField.setToolTipText("HTTP Basic Auth username. Leave empty to skip Basic Auth.");
-
+        passwordLabel = new JLabel("Password:");
         passwordField = new MirthPasswordField();
-        passwordField.setToolTipText("HTTP Basic Auth password.");
 
+        // Bearer token
+        bearerTokenLabel = new JLabel("Bearer Token:");
         bearerTokenField = new MirthTextField();
-        bearerTokenField.setToolTipText("Bearer token for Authorization header. Takes precedence over Basic Auth when set.");
 
+        // Google service account
+        saKeyFileLabel = new JLabel("Service Account Key File:");
+        saKeyFileField = new MirthTextField();
+        saKeyFileField.setToolTipText("Absolute path to the Google service account JSON key file.");
+
+        // Timeouts
         connectTimeoutField = new MirthTextField();
         connectTimeoutField.setToolTipText("TCP connection timeout in milliseconds.");
-
         readTimeoutField = new MirthTextField();
         readTimeoutField.setToolTipText("Socket read timeout in milliseconds.");
 
+        // Template
         templateArea = new MirthSyntaxTextArea();
-        templateArea.setSyntaxEditingStyle(org.fife.ui.rsyntaxtextarea.SyntaxConstants.SYNTAX_STYLE_NONE);
-        templateArea.setToolTipText("DICOM content template. Use ${DICOMMESSAGE} to send the current DICOM message.");
+        templateArea.setSyntaxEditingStyle(
+                org.fife.ui.rsyntaxtextarea.SyntaxConstants.SYNTAX_STYLE_NONE);
+        templateArea.setToolTipText("DICOM content. Use ${DICOMMESSAGE} to send the current message.");
 
-        container.add(new JLabel("URL:"), "right");
-        container.add(urlField, "growx, wrap");
+        panel.add(new JLabel("URL:"));
+        panel.add(urlField, "growx, wrap");
 
-        container.add(new JLabel("Username:"), "right");
-        container.add(usernameField, "growx, wrap");
+        panel.add(new JLabel("Authentication:"));
+        panel.add(authTypeCombo, "w 200, wrap");
 
-        container.add(new JLabel("Password:"), "right");
-        container.add(passwordField, "growx, wrap");
+        panel.add(usernameLabel);
+        panel.add(usernameField, "growx, wrap");
+        panel.add(passwordLabel);
+        panel.add(passwordField, "growx, wrap");
 
-        container.add(new JLabel("Bearer Token:"), "right");
-        container.add(bearerTokenField, "growx, wrap");
+        panel.add(bearerTokenLabel);
+        panel.add(bearerTokenField, "growx, wrap");
 
-        container.add(new JLabel("Connect Timeout (ms):"), "right");
-        container.add(connectTimeoutField, "w 80, wrap");
+        panel.add(saKeyFileLabel);
+        panel.add(saKeyFileField, "growx, wrap");
 
-        container.add(new JLabel("Read Timeout (ms):"), "right");
-        container.add(readTimeoutField, "w 80, wrap");
+        panel.add(new JLabel("Connect Timeout (ms):"));
+        panel.add(connectTimeoutField, "w 80, wrap");
+        panel.add(new JLabel("Read Timeout (ms):"));
+        panel.add(readTimeoutField, "w 80, wrap");
 
-        container.add(new JLabel("DICOM Template:"), "right, aligny top");
-        container.add(templateArea, "growx, h 80, wrap");
+        panel.add(new JLabel("DICOM Template:"), "aligny top");
+        panel.add(templateArea, "growx, h 80, wrap");
 
-        add(container, "growx, span");
+        add(panel, "growx, span");
+
+        updateAuthVisibility();
+    }
+
+    private void updateAuthVisibility() {
+        AuthType selected = (AuthType) authTypeCombo.getSelectedItem();
+
+        boolean isBasic   = selected == AuthType.BASIC;
+        boolean isBearer  = selected == AuthType.BEARER;
+        boolean isGoogle  = selected == AuthType.GOOGLE_SERVICE_ACCOUNT;
+
+        usernameLabel.setVisible(isBasic);
+        usernameField.setVisible(isBasic);
+        passwordLabel.setVisible(isBasic);
+        passwordField.setVisible(isBasic);
+
+        bearerTokenLabel.setVisible(isBearer);
+        bearerTokenField.setVisible(isBearer);
+
+        saKeyFileLabel.setVisible(isGoogle);
+        saKeyFileField.setVisible(isGoogle);
     }
 
     @Override
@@ -99,9 +167,11 @@ public class DICOMWebSender extends ConnectorSettingsPanel {
     public ConnectorProperties getProperties() {
         DICOMWebDispatcherProperties props = new DICOMWebDispatcherProperties();
         props.setUrl(urlField.getText());
+        props.setAuthType((AuthType) authTypeCombo.getSelectedItem());
         props.setUsername(usernameField.getText());
         props.setPassword(new String(passwordField.getPassword()));
         props.setBearerToken(bearerTokenField.getText());
+        props.setGoogleServiceAccountKeyFile(saKeyFileField.getText());
         props.setConnectTimeout(connectTimeoutField.getText());
         props.setReadTimeout(readTimeoutField.getText());
         props.setTemplate(templateArea.getText());
@@ -112,12 +182,15 @@ public class DICOMWebSender extends ConnectorSettingsPanel {
     public void setProperties(ConnectorProperties properties) {
         DICOMWebDispatcherProperties props = (DICOMWebDispatcherProperties) properties;
         urlField.setText(props.getUrl());
+        authTypeCombo.setSelectedItem(props.getAuthType());
         usernameField.setText(props.getUsername());
         passwordField.setText(props.getPassword());
         bearerTokenField.setText(props.getBearerToken());
+        saKeyFileField.setText(props.getGoogleServiceAccountKeyFile());
         connectTimeoutField.setText(props.getConnectTimeout());
         readTimeoutField.setText(props.getReadTimeout());
         templateArea.setText(props.getTemplate());
+        updateAuthVisibility();
     }
 
     @Override
@@ -131,9 +204,13 @@ public class DICOMWebSender extends ConnectorSettingsPanel {
         boolean valid = true;
 
         if (props.getUrl().isEmpty()) {
-            if (highlight) {
-                urlField.setBackground(UIConstants.INVALID_COLOR);
-            }
+            if (highlight) urlField.setBackground(UIConstants.INVALID_COLOR);
+            valid = false;
+        }
+
+        if (props.getAuthType() == AuthType.GOOGLE_SERVICE_ACCOUNT
+                && props.getGoogleServiceAccountKeyFile().isEmpty()) {
+            if (highlight) saKeyFileField.setBackground(UIConstants.INVALID_COLOR);
             valid = false;
         }
 
@@ -143,6 +220,7 @@ public class DICOMWebSender extends ConnectorSettingsPanel {
     @Override
     public void resetInvalidProperties() {
         urlField.setBackground(UIConstants.BACKGROUND_COLOR);
+        saKeyFileField.setBackground(UIConstants.BACKGROUND_COLOR);
     }
 
     @Override
