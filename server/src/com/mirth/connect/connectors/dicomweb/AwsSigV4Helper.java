@@ -20,6 +20,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpRequestBase;
 
 /**
  * Signs an HTTP POST request using AWS Signature Version 4 (SigV4).
@@ -37,68 +38,81 @@ class AwsSigV4Helper {
     private static final String HMAC_ALGORITHM = "HmacSHA256";
 
     /**
-     * Signs the given HttpPost in-place.
+     * Signs an HTTP request in-place using AWS SigV4.
+     * Works for any HTTP method; Content-Type is included in signed headers only when present.
      *
-     * @param post          request already configured with URL, Content-Type, and entity
-     * @param body          raw request body bytes (needed to compute payload hash)
+     * @param request       request already configured with URL, headers, and (for POST) entity
+     * @param body          raw request body bytes (use empty array for GET)
      * @param region        AWS region (e.g. "us-east-1")
      * @param service       AWS service name (e.g. "medical-imaging", "execute-api")
      * @param accessKeyId   AWS access key ID
      * @param secretKey     AWS secret access key
      */
-    static void sign(HttpPost post, byte[] body, String region, String service,
+    static void sign(HttpRequestBase request, byte[] body, String region, String service,
             String accessKeyId, String secretKey) throws Exception {
 
         Date now = new Date();
-        String datetime = formatDatetime(now);   // e.g. 20240115T120000Z
-        String date     = datetime.substring(0, 8); // e.g. 20240115
+        String datetime = formatDatetime(now);
+        String date     = datetime.substring(0, 8);
 
-        URI uri = post.getURI();
+        URI uri = request.getURI();
         String host = uri.getHost() + (uri.getPort() > 0 ? ":" + uri.getPort() : "");
 
-        String contentType = post.getFirstHeader("Content-Type") != null
-                ? post.getFirstHeader("Content-Type").getValue() : "";
+        org.apache.http.Header ctHeader = request.getFirstHeader("Content-Type");
+        String contentType = ctHeader != null ? ctHeader.getValue() : null;
         String payloadHash = hex(sha256(body));
 
-        // Set required headers before signing
-        post.setHeader("X-Amz-Date", datetime);
-        post.setHeader("X-Amz-Content-SHA256", payloadHash);
-        post.setHeader("Host", host);
+        request.setHeader("X-Amz-Date", datetime);
+        request.setHeader("X-Amz-Content-SHA256", payloadHash);
+        request.setHeader("Host", host);
 
-        // Canonical request
-        String canonicalPath    = uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
-        String canonicalQuery   = uri.getRawQuery() != null ? uri.getRawQuery() : "";
-        String canonicalHeaders =
-                "content-type:" + contentType + "\n" +
-                "host:"         + host        + "\n" +
-                "x-amz-content-sha256:" + payloadHash + "\n" +
-                "x-amz-date:"   + datetime    + "\n";
-        String signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
+        String canonicalPath  = uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
+        String canonicalQuery = uri.getRawQuery() != null ? uri.getRawQuery() : "";
 
-        String canonicalRequest = "POST\n"
+        // Canonical headers must be sorted; content-type (c) < host (h) < x-amz-* (x)
+        String canonicalHeaders;
+        String signedHeaders;
+        if (contentType != null) {
+            canonicalHeaders =
+                    "content-type:" + contentType + "\n" +
+                    "host:"         + host        + "\n" +
+                    "x-amz-content-sha256:" + payloadHash + "\n" +
+                    "x-amz-date:"   + datetime    + "\n";
+            signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
+        } else {
+            canonicalHeaders =
+                    "host:"         + host        + "\n" +
+                    "x-amz-content-sha256:" + payloadHash + "\n" +
+                    "x-amz-date:"   + datetime    + "\n";
+            signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+        }
+
+        String canonicalRequest = request.getMethod() + "\n"
                 + canonicalPath    + "\n"
                 + canonicalQuery   + "\n"
                 + canonicalHeaders + "\n"
                 + signedHeaders    + "\n"
                 + payloadHash;
 
-        // String to sign
         String credentialScope = date + "/" + region + "/" + service + "/aws4_request";
         String stringToSign = ALGORITHM + "\n"
                 + datetime        + "\n"
                 + credentialScope + "\n"
                 + hex(sha256(canonicalRequest.getBytes(StandardCharsets.UTF_8)));
 
-        // Signing key: HMAC chain
         byte[] signingKey = deriveSigningKey(secretKey, date, region, service);
         String signature  = hex(hmac(signingKey, stringToSign.getBytes(StandardCharsets.UTF_8)));
 
-        String authHeader = ALGORITHM
+        request.setHeader("Authorization", ALGORITHM
                 + " Credential=" + accessKeyId + "/" + credentialScope
                 + ", SignedHeaders=" + signedHeaders
-                + ", Signature=" + signature;
+                + ", Signature=" + signature);
+    }
 
-        post.setHeader("Authorization", authHeader);
+    /** Convenience overload kept for binary compatibility with existing STOW-RS call sites. */
+    static void sign(HttpPost post, byte[] body, String region, String service,
+            String accessKeyId, String secretKey) throws Exception {
+        sign((HttpRequestBase) post, body, region, service, accessKeyId, secretKey);
     }
 
     // -------------------------------------------------------------------------
