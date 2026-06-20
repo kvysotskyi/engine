@@ -376,7 +376,23 @@
 		DELETE FROM D_MA${localChannelId}
 		<include refid="pruneWhere" />
 	</delete>
-	
+
+	<select id="getSourceMapsWithDicomFile" parameterType="map" resultType="string">
+		SELECT CONTENT FROM D_MC${localChannelId}
+		WHERE METADATA_ID = 0
+		AND CONTENT_TYPE = 15
+		AND CONTENT LIKE '%dicomFile%'
+		<if test="includeMessageList != null">
+			AND MESSAGE_ID IN (${includeMessageList})
+		</if>
+		<if test="maxMessageId != null">
+			AND MESSAGE_ID <![CDATA[ <= ]]> #{maxMessageId}
+		</if>
+		<if test="minMessageId != null">
+			AND MESSAGE_ID <![CDATA[ >= ]]> #{minMessageId}
+		</if>
+	</select>
+
 	<sql id="pruneWhere">
 		<where>
 			<if test="includeMessageList != null">

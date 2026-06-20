@@ -74,6 +74,8 @@ public class DICOMListener extends ConnectorSettingsPanel {
         properties.setTrustStore(trustStoreField.getText());
         properties.setTrustStorePW(trustStorePasswordField.getText());
         properties.setApplicationEntity(applicationEntityField.getText());
+        properties.setAcceptedSopClasses(sopClassesArea.getText().trim());
+        properties.setAcceptedTransferSyntaxes(tsArea.getText().trim());
 
         return properties;
     }
@@ -157,6 +159,8 @@ public class DICOMListener extends ConnectorSettingsPanel {
             tlsNoRadioActionPerformed(null);
         }
         applicationEntityField.setText(props.getApplicationEntity());
+        sopClassesArea.setText(props.getAcceptedSopClasses());
+        tsArea.setText(props.getAcceptedTransferSyntaxes());
     }
 
     @Override
@@ -286,6 +290,20 @@ public class DICOMListener extends ConnectorSettingsPanel {
         keyPasswordField = new com.mirth.connect.client.ui.components.MirthTextField();
         applicationEntityField = new com.mirth.connect.client.ui.components.MirthTextField();
         jLabel3 = new javax.swing.JLabel();
+
+        sopClassesLabel = new javax.swing.JLabel("Accepted SOP Classes:");
+        sopClassesArea = new javax.swing.JTextArea();
+        sopClassesArea.setRows(4);
+        sopClassesArea.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 11));
+        sopClassesArea.setToolTipText("<html>SOP Class UIDs to accept, one per line.<br>Leave blank to accept all ~50 default DICOM storage SOP classes.</html>");
+        sopClassesScrollPane = new javax.swing.JScrollPane(sopClassesArea);
+
+        tsLabel = new javax.swing.JLabel("Accepted Transfer Syntaxes:");
+        tsArea = new javax.swing.JTextArea();
+        tsArea.setRows(3);
+        tsArea.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 11));
+        tsArea.setToolTipText("<html>Transfer Syntax UIDs to accept, one per line.<br>Leave blank to use the default/nativeData/bigEndian settings above.</html>");
+        tsScrollPane = new javax.swing.JScrollPane(tsArea);
 
         setBackground(new java.awt.Color(255, 255, 255));
         setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
@@ -593,7 +611,9 @@ public class DICOMListener extends ConnectorSettingsPanel {
                     .addComponent(jLabel23)
                     .addComponent(jLabel20)
                     .addComponent(jLabel21)
-                    .addComponent(jLabel26))
+                    .addComponent(jLabel26)
+                    .addComponent(sopClassesLabel)
+                    .addComponent(tsLabel))
                 .addGap(4, 4, 4)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
@@ -669,7 +689,9 @@ public class DICOMListener extends ConnectorSettingsPanel {
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(trustStorePasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(keyStorePasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                            .addComponent(keyStorePasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                    .addComponent(sopClassesScrollPane, 0, 300, Short.MAX_VALUE)
+                    .addComponent(tsScrollPane, 0, 300, Short.MAX_VALUE))
                 .addContainerGap(36, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
@@ -797,7 +819,15 @@ public class DICOMListener extends ConnectorSettingsPanel {
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                             .addComponent(trustStorePasswordLabel)
                             .addComponent(trustStorePasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))))
-                .addGap(0, 106, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(sopClassesLabel)
+                    .addComponent(sopClassesScrollPane, javax.swing.GroupLayout.PREFERRED_SIZE, 80, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(tsLabel)
+                    .addComponent(tsScrollPane, javax.swing.GroupLayout.PREFERRED_SIZE, 60, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(0, 10, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
     // @formatter:on
@@ -948,7 +978,16 @@ public class DICOMListener extends ConnectorSettingsPanel {
     private void ackOnNewConnectionYesActionPerformed(java.awt.event.ActionEvent evt)// GEN-FIRST:event_ackOnNewConnectionYesActionPerformed
     {// GEN-HEADEREND:event_ackOnNewConnectionYesActionPerformed
     }// GEN-LAST:event_ackOnNewConnection   YesActionPerformed
-     // Variables declaration - do not modify//GEN-BEGIN:variables
+
+    // Custom fields (not managed by form editor)
+    private javax.swing.JLabel sopClassesLabel;
+    private javax.swing.JTextArea sopClassesArea;
+    private javax.swing.JScrollPane sopClassesScrollPane;
+    private javax.swing.JLabel tsLabel;
+    private javax.swing.JTextArea tsArea;
+    private javax.swing.JScrollPane tsScrollPane;
+
+    // Variables declaration - do not modify//GEN-BEGIN:variables
 
     private javax.swing.JLabel acceptSSLv2Label;
     private com.mirth.connect.client.ui.components.MirthRadioButton acceptSSLv2NoRadio;

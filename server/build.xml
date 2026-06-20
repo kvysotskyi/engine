@@ -33,6 +33,8 @@
 		<property name="connectors.js" value="${extensions}/js" />
 		<property name="connectors.ws" value="${extensions}/ws" />
 		<property name="connectors.vm" value="${extensions}/vm" />
+		<property name="connectors.dicomweb" value="${extensions}/dicomweb" />
+		<property name="connectors.dicomquery" value="${extensions}/dicomquery" />
 
 		<!-- datatypes -->
 		<property name="plugins.datatype-delimited" value="${extensions}/datatype-delimited" />
@@ -438,6 +440,55 @@
 				<exclude name="com/mirth/connect/connectors/ws/DefinitionServiceMap$DefinitionPortMap.class" />
 				<exclude name="com/mirth/connect/connectors/ws/DefinitionServiceMap$PortInformation.class" />
 				<exclude name="com/mirth/connect/connectors/ws/WebServiceConnectorServletInterface.class" />
+			</fileset>
+		</jar>
+
+		<!-- connectors.dicomweb -->
+		<mkdir dir="${connectors.dicomweb}" />
+		<copy todir="${connectors.dicomweb}">
+			<fileset dir="${src}/com/mirth/connect/connectors/dicomweb">
+				<include name="*.xml" />
+			</fileset>
+		</copy>
+		<jar destfile="${connectors.dicomweb}/dicomweb-shared.jar" basedir="${classes}" modificationTime="${archive.entry.date}">
+			<include name="com/mirth/connect/connectors/dicomweb/*DispatcherProperties.class" />
+			<include name="com/mirth/connect/connectors/dicomweb/*DispatcherProperties$*.class" />
+		</jar>
+		<jar destfile="${connectors.dicomweb}/dicomweb-server.jar" modificationTime="${archive.entry.date}">
+			<fileset dir="${classes}">
+				<include name="com/mirth/connect/connectors/dicomweb/**" />
+				<exclude name="com/mirth/connect/connectors/dicomweb/*DispatcherProperties.class" />
+				<exclude name="com/mirth/connect/connectors/dicomweb/*DispatcherProperties$*.class" />
+			</fileset>
+		</jar>
+
+		<!-- connectors.dicomquery -->
+		<mkdir dir="${connectors.dicomquery}" />
+		<copy todir="${connectors.dicomquery}">
+			<fileset dir="${src}/com/mirth/connect/connectors/dicomquery">
+				<include name="*.xml" />
+			</fileset>
+		</copy>
+		<copy todir="${connectors.dicomquery}/lib" failonerror="false" quiet="true">
+			<fileset dir="${lib.extensions}/dimse">
+				<include name="dcm4che-core-*.jar" />
+				<include name="dcm4che-net-*.jar" />
+				<include name="dcm4che-filecache-*.jar" />
+			</fileset>
+		</copy>
+		<jar destfile="${connectors.dicomquery}/dicomquery-shared.jar" basedir="${classes}" modificationTime="${archive.entry.date}">
+			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties.class" />
+			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties$*.class" />
+			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties.class" />
+			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties$*.class" />
+		</jar>
+		<jar destfile="${connectors.dicomquery}/dicomquery-server.jar" modificationTime="${archive.entry.date}">
+			<fileset dir="${classes}">
+				<include name="com/mirth/connect/connectors/dicomquery/**" />
+				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties.class" />
+				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties$*.class" />
+				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties.class" />
+				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties$*.class" />
 			</fileset>
 		</jar>
 

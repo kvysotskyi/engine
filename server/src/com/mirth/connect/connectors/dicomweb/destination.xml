@@ -1,0 +1,17 @@
+<connectorMetaData path="dicomweb">
+	<name>DICOMweb STOW-RS Sender</name>
+	<author>NextGen Healthcare</author>
+	<pluginVersion>@mirthversion</pluginVersion>
+	<mirthVersion>@mirthversion</mirthVersion>
+	<url>https://openintegrationengine.org</url>
+	<description>Sends DICOM instances to a DICOMweb server using the STOW-RS (Store Over the Web) protocol.</description>
+	<clientClassName>com.mirth.connect.connectors.dicomweb.DICOMWebSender</clientClassName>
+	<serverClassName>com.mirth.connect.connectors.dicomweb.DICOMWebDispatcher</serverClassName>
+	<sharedClassName>com.mirth.connect.connectors.dicomweb.DICOMWebDispatcherProperties</sharedClassName>
+	<library type="CLIENT" path="dicomweb-client.jar" />
+	<library type="SHARED" path="dicomweb-shared.jar" />
+	<library type="SERVER" path="dicomweb-server.jar" />
+	<transformers></transformers>
+	<protocol>dicomweb</protocol>
+	<type>DESTINATION</type>
+</connectorMetaData>
