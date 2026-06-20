@@ -34,7 +34,9 @@
 		<property name="connectors.js" value="${extensions}/js" />
 		<property name="connectors.ws" value="${extensions}/ws" />
 		<property name="connectors.vm" value="${extensions}/vm" />
-		
+		<property name="connectors.dicomweb" value="${extensions}/dicomweb" />
+		<property name="connectors.dicomquery" value="${extensions}/dicomquery" />
+
 		<!-- datatypes -->
 		<property name="plugins.datatype-delimited" value="${extensions}/datatype-delimited" />
 		<property name="plugins.datatype-dicom" value="${extensions}/datatype-dicom" />
@@ -179,6 +181,16 @@
 		<mkdir dir="${connectors.vm}" />
 		<jar destfile="${connectors.vm}/vm-client.jar" basedir="${classes}" modificationTime="${archive.entry.date}">
 			<include name="com/mirth/connect/connectors/vm/**" />
+		</jar>
+
+		<mkdir dir="${connectors.dicomweb}" />
+		<jar destfile="${connectors.dicomweb}/dicomweb-client.jar" basedir="${classes}" modificationTime="${archive.entry.date}">
+			<include name="com/mirth/connect/connectors/dicomweb/**" />
+		</jar>
+
+		<mkdir dir="${connectors.dicomquery}" />
+		<jar destfile="${connectors.dicomquery}/dicomquery-client.jar" basedir="${classes}" modificationTime="${archive.entry.date}">
+			<include name="com/mirth/connect/connectors/dicomquery/**" />
 		</jar>
 
 		<!-- plugins -->
