@@ -22,11 +22,14 @@ import org.dcm4che2.data.DicomObject;
 import org.dcm4che2.data.Tag;
 import org.dcm4che2.io.DicomInputStream;
 import org.dcm4che2.io.DicomOutputStream;
+import org.dcm4che2.data.UID;
 import org.dcm4che2.net.Association;
 import org.dcm4che2.net.Device;
 import org.dcm4che2.net.DicomServiceException;
+import org.dcm4che2.net.NetworkApplicationEntity;
 import org.dcm4che2.net.NetworkConnection;
 import org.dcm4che2.net.PDVInputStream;
+import org.dcm4che2.net.TransferCapability;
 import org.dcm4che2.net.pdu.PresentationContext;
 import org.dcm4che2.net.pdu.UserIdentityRQ;
 
@@ -46,6 +49,9 @@ public class MirthDcmRcv extends DcmRcv {
     private String storageFolder;
     private boolean deleteAfterProcessing;
 
+    private String[] customSopClasses = null;
+    private String[] trackedTsuids = null;
+
     // messageId -> file, for deleteAfterProcessing in async mode
     private final ConcurrentHashMap<Long, File> pendingFiles = new ConcurrentHashMap<>();
 
@@ -62,6 +68,34 @@ public class MirthDcmRcv extends DcmRcv {
 
     public void setDeleteAfterProcessing(boolean deleteAfterProcessing) {
         this.deleteAfterProcessing = deleteAfterProcessing;
+    }
+
+    public void setCustomSopClasses(String[] cuids) {
+        this.customSopClasses = cuids;
+    }
+
+    @Override
+    public void setTransferSyntax(String[] tsuids) {
+        super.setTransferSyntax(tsuids);
+        this.trackedTsuids = tsuids;
+    }
+
+    @Override
+    public void initTransferCapability() {
+        if (customSopClasses == null || customSopClasses.length == 0) {
+            super.initTransferCapability();
+            return;
+        }
+        String[] tsuids = trackedTsuids != null ? trackedTsuids
+                : new String[]{ UID.ExplicitVRLittleEndian, UID.ImplicitVRLittleEndian };
+        NetworkApplicationEntity ae = getDevice().getNetworkApplicationEntity()[0];
+        TransferCapability[] tc = new TransferCapability[customSopClasses.length + 1];
+        tc[0] = new TransferCapability(UID.VerificationSOPClass,
+                new String[]{ UID.ImplicitVRLittleEndian }, TransferCapability.SCP);
+        for (int i = 0; i < customSopClasses.length; i++) {
+            tc[i + 1] = new TransferCapability(customSopClasses[i], tsuids, TransferCapability.SCP);
+        }
+        ae.setTransferCapability(tc);
     }
 
     public Device getDevice() {

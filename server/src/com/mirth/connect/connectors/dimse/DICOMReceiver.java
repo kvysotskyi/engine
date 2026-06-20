@@ -9,6 +9,8 @@
 
 package com.mirth.connect.connectors.dimse;
 
+import java.util.Arrays;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.logging.log4j.LogManager;
@@ -143,6 +145,30 @@ public class DICOMReceiver extends SourceConnector {
             int maxConnections = NumberUtils.toInt(connectorProperties.getMaxConnections());
             if (maxConnections > 0) {
                 dcmrcv.setMaxConnections(maxConnections);
+            }
+
+            // Custom SOP classes: replaces the ~50 hardcoded defaults if non-empty
+            String sopClassesStr = connectorProperties.getAcceptedSopClasses();
+            if (StringUtils.isNotBlank(sopClassesStr)) {
+                String[] cuids = Arrays.stream(sopClassesStr.split("[,\n\r]+"))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toArray(String[]::new);
+                if (cuids.length > 0) {
+                    dcmrcv.setCustomSopClasses(cuids);
+                }
+            }
+
+            // Custom transfer syntaxes: overrides the defts/nativeData/bigEndian flags if non-empty
+            String tsStr = connectorProperties.getAcceptedTransferSyntaxes();
+            if (StringUtils.isNotBlank(tsStr)) {
+                String[] tsuids = Arrays.stream(tsStr.split("[,\n\r]+"))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toArray(String[]::new);
+                if (tsuids.length > 0) {
+                    dcmrcv.setTransferSyntax(tsuids);
+                }
             }
 
             dcmrcv.initTransferCapability();

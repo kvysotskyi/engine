@@ -52,6 +52,9 @@ public class DICOMReceiverProperties extends ConnectorProperties implements List
     private boolean deleteAfterProcessing;
     private String maxConnections;
 
+    private String acceptedSopClasses;
+    private String acceptedTransferSyntaxes;
+
     private String keyPW;
     private String keyStore;
     private String keyStorePW;
@@ -87,6 +90,9 @@ public class DICOMReceiverProperties extends ConnectorProperties implements List
         storageFolder = "";
         deleteAfterProcessing = false;
         maxConnections = "0";
+
+        acceptedSopClasses = "";
+        acceptedTransferSyntaxes = "";
 
         keyPW = "";
         keyStore = "";
@@ -326,6 +332,22 @@ public class DICOMReceiverProperties extends ConnectorProperties implements List
 
     public void setMaxConnections(String maxConnections) {
         this.maxConnections = maxConnections;
+    }
+
+    public String getAcceptedSopClasses() {
+        return acceptedSopClasses;
+    }
+
+    public void setAcceptedSopClasses(String acceptedSopClasses) {
+        this.acceptedSopClasses = acceptedSopClasses;
+    }
+
+    public String getAcceptedTransferSyntaxes() {
+        return acceptedTransferSyntaxes;
+    }
+
+    public void setAcceptedTransferSyntaxes(String acceptedTransferSyntaxes) {
+        this.acceptedTransferSyntaxes = acceptedTransferSyntaxes;
     }
 
     public String getKeyPW() {
