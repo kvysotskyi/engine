@@ -53,10 +53,18 @@ public class DICOMQueryReceiverProperties extends ConnectorProperties
 
     public DICOMQueryReceiverProperties(DICOMQueryReceiverProperties props) {
         super(props);
-        listenerConnectorProperties = new ListenerConnectorProperties(
-                props.getListenerConnectorProperties());
-        sourceConnectorProperties = new SourceConnectorProperties(
-                props.getSourceConnectorProperties());
+        ListenerConnectorProperties srcLcp = props.getListenerConnectorProperties();
+        listenerConnectorProperties = new ListenerConnectorProperties(srcLcp.getPort());
+        listenerConnectorProperties.setHost(srcLcp.getHost());
+
+        SourceConnectorProperties srcScp = props.getSourceConnectorProperties();
+        sourceConnectorProperties = new SourceConnectorProperties(srcScp.getResponseVariable());
+        sourceConnectorProperties.setRespondAfterProcessing(srcScp.isRespondAfterProcessing());
+        sourceConnectorProperties.setProcessBatch(srcScp.isProcessBatch());
+        sourceConnectorProperties.setFirstResponse(srcScp.isFirstResponse());
+        sourceConnectorProperties.setProcessingThreads(srcScp.getProcessingThreads());
+        sourceConnectorProperties.setResourceIds(new java.util.LinkedHashMap<>(srcScp.getResourceIds()));
+        sourceConnectorProperties.setQueueBufferSize(srcScp.getQueueBufferSize());
 
         applicationEntity = props.getApplicationEntity();
         acceptedModel = props.getAcceptedModel();

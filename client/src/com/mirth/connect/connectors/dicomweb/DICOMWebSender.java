@@ -148,8 +148,6 @@ public class DICOMWebSender extends ConnectorSettingsPanel {
         readTimeoutField = new MirthTextField();
         readTimeoutField.setToolTipText("Socket read timeout in milliseconds.");
         templateArea = new MirthSyntaxTextArea();
-        templateArea.setSyntaxEditingStyle(
-                org.fife.ui.rsyntaxtextarea.SyntaxConstants.SYNTAX_STYLE_NONE);
         templateArea.setToolTipText("DICOM content. Default: ${DICOMMESSAGE}.");
 
         // Layout

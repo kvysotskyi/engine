@@ -478,13 +478,17 @@
 		</copy>
 		<jar destfile="${connectors.dicomquery}/dicomquery-shared.jar" basedir="${classes}" modificationTime="${archive.entry.date}">
 			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties.class" />
+			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties$*.class" />
 			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties.class" />
+			<include name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties$*.class" />
 		</jar>
 		<jar destfile="${connectors.dicomquery}/dicomquery-server.jar" modificationTime="${archive.entry.date}">
 			<fileset dir="${classes}">
 				<include name="com/mirth/connect/connectors/dicomquery/**" />
 				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties.class" />
+				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryReceiverProperties$*.class" />
 				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties.class" />
+				<exclude name="com/mirth/connect/connectors/dicomquery/DICOMQueryDispatcherProperties$*.class" />
 			</fileset>
 		</jar>
 
